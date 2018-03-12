@@ -32,5 +32,17 @@ namespace Destructurama
         {
             return configuration.With<JsonNetDestructuringPolicy>();
         }
+
+        /// <summary>
+        /// Enable destructuring of JSON.NET dynamic objects.
+        /// </summary>
+        /// <param name="configuration">The logger configuration to apply configuration to.</param>
+        /// <param name="ignoreNames">Json property names to ignore</param>
+        /// <returns>An object allowing configuration to continue.</returns>
+        public static LoggerConfiguration JsonNetTypes(this LoggerDestructuringConfiguration configuration,
+            params string[] ignoreNames)
+        {
+            return configuration.With(new JsonNetDestructuringPolicy(ignoreNames));
+        }
     }
 }

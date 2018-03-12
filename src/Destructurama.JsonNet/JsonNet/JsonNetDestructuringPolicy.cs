@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
@@ -22,6 +23,26 @@ namespace Destructurama.JsonNet
 {
     internal class JsonNetDestructuringPolicy : IDestructuringPolicy
     {
+        private readonly HashSet<string> _ignoreExtactNames;
+        private readonly string[] _ignoreLikeNames;
+
+        public JsonNetDestructuringPolicy()
+        {
+
+        }
+
+        public JsonNetDestructuringPolicy(params string[] ignoreNames)
+        {
+            var igNames = (ignoreNames ?? Enumerable.Empty<string>()).Where(x => !string.IsNullOrEmpty(x));
+
+            _ignoreExtactNames = new HashSet<string>(igNames.Where(x => !x.StartsWith("*") && !x.EndsWith("*")),
+                StringComparer.CurrentCultureIgnoreCase);
+
+            _ignoreLikeNames = igNames.Where(x => x.StartsWith("*") || x.EndsWith("*"))
+                .Select(x => x.ToLower())
+                .ToArray();
+        }
+
         public bool TryDestructure(object value, ILogEventPropertyValueFactory propertyValueFactory, out LogEventPropertyValue result)
         {
             switch (value)
@@ -59,6 +80,9 @@ namespace Destructurama.JsonNet
             var props = new List<LogEventProperty>(jo.Count);
             foreach (var prop in jo.Properties())
             {
+                if (!CheckJsonName(prop))
+                    continue;
+
                 if (prop.Name == "$type")
                 {
                     if (prop.Value is JValue typeVal && typeVal.Value is string)
@@ -72,6 +96,33 @@ namespace Destructurama.JsonNet
             }
 
             return new StructureValue(props, typeTag);
+        }
+
+        private bool CheckJsonName(JProperty jProperty)
+        {
+            if (_ignoreExtactNames != null && _ignoreExtactNames.Contains(jProperty.Name))
+                return false;
+            if(_ignoreLikeNames != null)
+            {
+                foreach (var item in _ignoreLikeNames)
+                {
+                    //Start with *
+                    if (!item.StartsWith("*") && item.EndsWith("*"))
+                        if (jProperty.Name.ToLower().StartsWith(item.Substring(1, item.Length - 1)))
+                            return false;
+
+                    //Ends with *
+                    if (item.StartsWith("*") && !item.EndsWith("*"))
+                        if (jProperty.Name.ToLower().EndsWith(item.Substring(0, item.Length - 1)))
+                            return false;
+
+                    //Both Start *
+                    if (jProperty.Name.ToLower().Contains(item.Substring(1, item.Length - 2)))
+                        return false;
+                }
+            }
+
+            return true;
         }
     }
 }
